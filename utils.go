@@ -157,7 +157,7 @@ func GenerateCert(caname, pkname string) (ca *x509.Certificate, pk *rsa.PrivateK
 	return
 }
 
-func DialHttp(rawurl string) (conn net.Conn, err error) {
+func DialHttp(rawurl, ip string) (conn net.Conn, err error) {
 	var (
 		u              *url.URL
 		hostport, port string
@@ -168,14 +168,16 @@ func DialHttp(rawurl string) (conn net.Conn, err error) {
 
 	port = u.Port()
 	if port == "" {
+		port = "80"
 		if u.Scheme == "https" {
 			port = "443"
-		} else {
-			port = "80"
 		}
 	}
 
 	hostport = fmt.Sprintf("%s:%s", u.Hostname(), port)
+	if len(ip) > 0 {
+		hostport = fmt.Sprintf("%s:%s", ip, port)
+	}
 
 	if conn, err = net.Dial("tcp", hostport); err != nil {
 		return

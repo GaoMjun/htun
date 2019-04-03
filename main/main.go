@@ -13,5 +13,5 @@ func init() {
 
 func main() {
 	server := htun.Server{Addr: os.Args[1]}
-	server.Run()
+	server.Run(os.Args[2], os.Args[3])
 }

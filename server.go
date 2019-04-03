@@ -19,15 +19,32 @@ type Server struct {
 	Addr string
 }
 
-func (self *Server) Run() (err error) {
-	var l net.Listener
+func (self *Server) Run(capath, pkpath string) (err error) {
+	var (
+		l         net.Listener
+		tlsConfig *tls.Config
+	)
 	if l, err = net.Listen("tcp", self.Addr); err != nil {
 		return
 	}
+	defer l.Close()
+
 	log.Println("server run at", l.Addr())
+
+	if l.Addr().(*net.TCPAddr).Port == 443 {
+		var cert tls.Certificate
+		if cert, err = tls.LoadX509KeyPair(capath, pkpath); err != nil {
+			return
+		}
+
+		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+	}
 
 	for {
 		conn, _ := l.Accept()
+		if tlsConfig != nil {
+			conn = tls.Server(conn, tlsConfig)
+		}
 
 		go self.handleConn(conn)
 	}
@@ -59,23 +76,26 @@ func (self *Server) handleConn(tunnelConn net.Conn) {
 	// fmt.Print(request.Dump())
 
 	var (
-		s     string
-		https string
-		r     = request.HttpRequest
+		s           string
+		https       string
+		r           = request.HttpRequest
+		realRequest []byte
+		req         *http.Request
 	)
+	defer func() {
+		fmt.Fprint(tunnelConn, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n")
+		tunnelConn.Write(index)
+	}()
+
 	if s = r.Header.Get("Real-Reaquest"); len(s) <= 0 {
 		return
 	}
-	if https = r.Header.Get("Https"); len(s) <= 0 {
-		return
-	}
+	https = r.Header.Get("Https")
 
-	var realRequest []byte
 	if realRequest, err = base64.StdEncoding.DecodeString(s); err != nil {
 		return
 	}
 
-	var req *http.Request
 	if req, err = http.ReadRequest(bufio.NewReader(bytes.NewReader(realRequest))); err != nil {
 		return
 	}
@@ -85,20 +105,18 @@ func (self *Server) handleConn(tunnelConn net.Conn) {
 		hostport    = req.Host
 		hostandport = strings.Split(hostport, ":")
 		host        = hostandport[0]
+		remoteConn  net.Conn
 	)
+	port = "80"
+	if https == "true" {
+		port = "443"
+	}
 	if len(hostandport) == 2 {
 		port = hostandport[1]
-	} else {
-		if https == "true" {
-			port = "443"
-		} else {
-			port = "80"
-		}
 	}
 	hostport = fmt.Sprintf("%s:%s", host, port)
 	log.Println(hostport)
 
-	var remoteConn net.Conn
 	if remoteConn, err = net.Dial("tcp", hostport); err != nil {
 		return
 	}

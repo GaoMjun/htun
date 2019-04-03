@@ -66,7 +66,7 @@ func TestCertLoad(t *testing.T) {
 }
 
 func TestDialHttp(t *testing.T) {
-	DialHttp("https://baidu.com/")
+	DialHttp("https://baidu.com/", "")
 }
 
 func TestHTTPCONNECT(t *testing.T) {

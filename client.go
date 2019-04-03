@@ -28,6 +28,8 @@ func (self *Client) Run() (err error) {
 	if l, err = net.Listen("tcp", self.LocalAddr); err != nil {
 		return
 	}
+	defer l.Close()
+
 	log.Println("client run at", l.Addr())
 
 	for {
@@ -72,8 +74,10 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 	// fmt.Print(request.Dump())
 
 	var (
-		u      *url.URL
-		rawReq []byte
+		u          *url.URL
+		rawReq     []byte
+		tunnelConn net.Conn
+		ip         = ""
 	)
 	if u, err = url.Parse(self.ServerAddr); err != nil {
 		return
@@ -83,8 +87,6 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 	request.HttpRequest.Header.Add("Real-Reaquest", base64.StdEncoding.EncodeToString(request.Bytes()))
 	if https {
 		request.HttpRequest.Header.Add("Https", "true")
-	} else {
-		request.HttpRequest.Header.Add("Https", "false")
 	}
 
 	if rawReq, err = httputil.DumpRequest(request.HttpRequest, false); err != nil {
@@ -93,10 +95,10 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 
 	// fmt.Print(string(rawReq))
 
-	var tunnelConn net.Conn
-	if tunnelConn, err = DialHttp(self.ServerAddr); err != nil {
+	if tunnelConn, err = DialHttp(self.ServerAddr, ip); err != nil {
 		return
 	}
+	defer tunnelConn.Close()
 
 	if _, err = tunnelConn.Write(rawReq); err != nil {
 		return
