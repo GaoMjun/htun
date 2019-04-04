@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/golang/snappy"
+
 	"github.com/GaoMjun/ladder"
 )
 
@@ -93,6 +95,10 @@ func (self *Server) handleConn(tunnelConn net.Conn) {
 	https = r.Header.Get("Https")
 
 	if realRequest, err = base64.StdEncoding.DecodeString(s); err != nil {
+		return
+	}
+
+	if realRequest, err = snappy.Decode(nil, realRequest); err != nil {
 		return
 	}
 

@@ -13,6 +13,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 
+	"github.com/golang/snappy"
+
 	"github.com/GaoMjun/ladder"
 )
 
@@ -77,14 +79,16 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 		u          *url.URL
 		rawReq     []byte
 		tunnelConn net.Conn
-		ip         = ""
+		ip         = "149.129.62.126"
 	)
 	if u, err = url.Parse(self.ServerAddr); err != nil {
 		return
 	}
-	request.HttpRequest.RequestURI = ""
 	request.HttpRequest.Host = u.Host
-	request.HttpRequest.Header.Add("Real-Reaquest", base64.StdEncoding.EncodeToString(request.Bytes()))
+	request.HttpRequest.RequestURI = "/" + base64.StdEncoding.EncodeToString([]byte(request.HttpRequest.RequestURI))
+	request.HttpRequest.Header.Del("Origin")
+	request.HttpRequest.Header.Del("Referer")
+	request.HttpRequest.Header.Add("Real-Reaquest", base64.StdEncoding.EncodeToString(snappy.Encode(nil, request.Bytes())))
 	if https {
 		request.HttpRequest.Header.Add("Https", "true")
 	}
@@ -92,8 +96,6 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 	if rawReq, err = httputil.DumpRequest(request.HttpRequest, false); err != nil {
 		return
 	}
-
-	// fmt.Print(string(rawReq))
 
 	if tunnelConn, err = DialHttp(self.ServerAddr, ip); err != nil {
 		return
@@ -103,6 +105,8 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 	if _, err = tunnelConn.Write(rawReq); err != nil {
 		return
 	}
+
+	fmt.Println(string(rawReq))
 
 	ladder.Pipe(localConn, tunnelConn)
 }
