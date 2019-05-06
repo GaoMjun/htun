@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/tls"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -94,7 +94,7 @@ func (self *Server) handleConn(tunnelConn net.Conn) {
 	}
 	https = r.Header.Get("Https")
 
-	if realRequest, err = base64.StdEncoding.DecodeString(s); err != nil {
+	if realRequest, err = hex.DecodeString(s); err != nil {
 		return
 	}
 

@@ -19,9 +19,9 @@ func TestHtun(t *testing.T) {
 	var (
 		// server    = Server{Addr: "127.0.0.1:8888"}
 		ca, pk, _ = LoadCert("htun.cer", "htun.key")
-		client    = Client{":8877", "https://htun01.herokuapp.com/", ca, pk}
+		client    = Client{":19999", "http://test.ceewa.com/", ca, pk}
 	)
 
-	// go server.Run()
+	// go server.Run("", "")
 	client.Run()
 }
