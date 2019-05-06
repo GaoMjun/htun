@@ -21,6 +21,7 @@ import (
 type Client struct {
 	LocalAddr  string
 	ServerAddr string
+	HttpServer *http.Server
 	CA         *x509.Certificate
 	PK         *rsa.PrivateKey
 }
@@ -40,12 +41,16 @@ func (self *Client) Run() (err error) {
 	// 	go self.handleConn(conn, false)
 	// }
 
-	err = http.ListenAndServe(self.LocalAddr, http.HandlerFunc(self.handleHttp))
+	self.HttpServer = &http.Server{
+		Addr:    self.LocalAddr,
+		Handler: http.HandlerFunc(self.handleHttp),
+	}
 
+	err = self.HttpServer.ListenAndServe()
 	return
 }
 
-func (self *Client)handleHttp(w http.ResponseWriter, r *http.Request) {
+func (self *Client) handleHttp(w http.ResponseWriter, r *http.Request) {
 	var (
 		err error
 		bs  []byte
@@ -76,7 +81,7 @@ func (self *Client)handleHttp(w http.ResponseWriter, r *http.Request) {
 			}}
 		localConn = tls.Server(localConn, tlsConfig)
 
-		self.handleConn(localConn, true)
+		err = self.HttpServer.Serve(NewListener(localConn))
 		return
 	}
 
