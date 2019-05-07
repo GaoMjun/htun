@@ -73,7 +73,7 @@ func handleHttp(w http.ResponseWriter, r *http.Request) {
 	if reqBytes, err = httputil.DumpRequest(req, true); err != nil {
 		return
 	}
-	// fmt.Println(string(reqBytes))
+	log.Println(string(reqBytes))
 
 	var (
 		hostandport = strings.Split(req.Host, ":")
@@ -114,7 +114,7 @@ func handleHttp(w http.ResponseWriter, r *http.Request) {
 	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
 		return
 	}
-	// fmt.Println(string(respBytes))
+	log.Println(string(respBytes))
 
 	if _, err = w.Write(respBytes); err != nil {
 		return

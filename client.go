@@ -1,6 +1,7 @@
 package htun
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rsa"
 	"crypto/tls"
@@ -161,11 +162,12 @@ func (self *Client) handleHttps(w http.ResponseWriter, r *http.Request) {
 
 func (self *Client) DoRequest(w http.ResponseWriter, r *http.Request, body io.Reader, https bool) {
 	var (
-		err       error
-		req       *http.Request
-		resp      *http.Response
-		url       = self.ServerAddr + r.URL.Path
-		localConn net.Conn
+		err         error
+		req         *http.Request
+		resp, resp2 *http.Response
+		url         = self.ServerAddr + r.URL.Path
+		localConn   net.Conn
+		resp2Bytes  []byte
 	)
 	defer func() {
 		if err != nil {
@@ -194,9 +196,19 @@ func (self *Client) DoRequest(w http.ResponseWriter, r *http.Request, body io.Re
 		return
 	}
 
-	// if resp2, err = http.ReadResponse(bufio.NewReader(resp.Body), nil); err != nil {
+	if resp2, err = http.ReadResponse(bufio.NewReader(resp.Body), nil); err != nil {
+		return
+	}
 
-	// }
+	if resp2Bytes, err = httputil.DumpResponse(resp2, false); err != nil {
+		return
+	}
+
+	// fmt.Println(string(resp2Bytes))
+
+	if _, err = localConn.Write(resp2Bytes); err != nil {
+		return
+	}
 
 	_, err = io.Copy(localConn, resp.Body)
 }
