@@ -2,17 +2,14 @@ package htun
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/tls"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"strings"
-
-	"github.com/golang/snappy"
 
 	"github.com/GaoMjun/ladder"
 )
@@ -22,42 +19,114 @@ type Server struct {
 }
 
 func (self *Server) Run(capath, pkpath string) (err error) {
+	// var (
+	// 	l         net.Listener
+	// 	tlsConfig *tls.Config
+	// )
+	// if l, err = net.Listen("tcp", self.Addr); err != nil {
+	// 	return
+	// }
+	// defer l.Close()
+
+	// log.Println("server run at", l.Addr())
+
+	// if l.Addr().(*net.TCPAddr).Port == 443 {
+	// 	var cert tls.Certificate
+	// 	if cert, err = tls.LoadX509KeyPair(capath, pkpath); err != nil {
+	// 		return
+	// 	}
+
+	// 	tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+	// }
+
+	// for {
+	// 	conn, _ := l.Accept()
+	// 	if tlsConfig != nil {
+	// 		conn = tls.Server(conn, tlsConfig)
+	// 	}
+
+	// 	go self.handleConn(conn)
+	// }
+
+	http.ListenAndServe(self.Addr, http.HandlerFunc(handleHttp))
+	return
+}
+
+func handleHttp(w http.ResponseWriter, r *http.Request) {
 	var (
-		l         net.Listener
-		tlsConfig *tls.Config
+		err      error
+		https    = r.Header.Get("Https")
+		req      *http.Request
+		reqBytes []byte
 	)
-	if l, err = net.Listen("tcp", self.Addr); err != nil {
+	defer func() {
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+
+	if req, err = http.ReadRequest(bufio.NewReader(r.Body)); err != nil {
 		return
 	}
-	defer l.Close()
+	req.RequestURI = ""
 
-	log.Println("server run at", l.Addr())
+	if reqBytes, err = httputil.DumpRequest(req, true); err != nil {
+		return
+	}
+	// fmt.Println(string(reqBytes))
 
-	if l.Addr().(*net.TCPAddr).Port == 443 {
-		var cert tls.Certificate
-		if cert, err = tls.LoadX509KeyPair(capath, pkpath); err != nil {
-			return
-		}
+	var (
+		hostandport = strings.Split(req.Host, ":")
+		host        = hostandport[0]
+		port        = "80"
+		hostport    string
+		remoteConn  net.Conn
+		resp        *http.Response
+		respBytes   []byte
+	)
+	if https == "true" {
+		port = "443"
+	}
+	if len(hostandport) == 2 {
+		port = hostandport[1]
+	}
+	hostport = fmt.Sprintf("%s:%s", host, port)
+	log.Println(hostport)
 
-		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+	if remoteConn, err = net.Dial("tcp", hostport); err != nil {
+		return
+	}
+	defer remoteConn.Close()
+
+	if https == "true" {
+		tlsConfig := &tls.Config{ServerName: host}
+		remoteConn = tls.Client(remoteConn, tlsConfig)
 	}
 
-	for {
-		conn, _ := l.Accept()
-		if tlsConfig != nil {
-			conn = tls.Server(conn, tlsConfig)
-		}
-
-		go self.handleConn(conn)
+	if _, err = remoteConn.Write(reqBytes); err != nil {
+		return
 	}
 
-	return
+	if resp, err = http.ReadResponse(bufio.NewReader(remoteConn), req); err != nil {
+		return
+	}
+
+	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
+		return
+	}
+	// fmt.Println(string(respBytes))
+
+	if _, err = w.Write(respBytes); err != nil {
+		return
+	}
+
+	_, err = io.Copy(w, resp.Body)
 }
 
 func (self *Server) handleConn(tunnelConn net.Conn) {
 	var (
-		err     error
-		request *ladder.Request
+		err error
+		// request *ladder.Request
 	)
 	defer func() {
 		tunnelConn.Close()
@@ -67,53 +136,55 @@ func (self *Server) handleConn(tunnelConn net.Conn) {
 		}
 	}()
 
-	if request, err = ladder.NewRequest(tunnelConn); err != nil {
-		return
-	}
+	// if request, err = ladder.NewRequest(tunnelConn); err != nil {
+	// 	return
+	// }
 
-	if request.HttpRequest.Method == http.MethodConnect {
-		return
-	}
+	// if request.HttpRequest.Method == http.MethodConnect {
+	// 	return
+	// }
 
 	// fmt.Print(request.Dump())
 
 	var (
-		s           string
-		https       string
-		r           = request.HttpRequest
+		// s           string
+		// https string
+		// r           = request.HttpRequest
 		realRequest []byte
 		req         *http.Request
 	)
-	defer func() {
-		fmt.Fprint(tunnelConn, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n")
-		tunnelConn.Write(index)
-	}()
+	// defer func() {
+	// 	fmt.Fprint(tunnelConn, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n")
+	// 	tunnelConn.Write(index)
+	// }()
 
-	if s = r.Header.Get("Real-Reaquest"); len(s) <= 0 {
-		return
-	}
-	https = r.Header.Get("Https")
+	// http.ReadRequest(bufio.NewReader(r.Body))
 
-	if realRequest, err = hex.DecodeString(s); err != nil {
-		return
-	}
+	// if s = r.Header.Get("Real-Reaquest"); len(s) <= 0 {
+	// 	return
+	// }
+	// https = r.Header.Get("Https")
 
-	if realRequest, err = snappy.Decode(nil, realRequest); err != nil {
-		return
-	}
+	// if realRequest, err = hex.DecodeString(s); err != nil {
+	// 	return
+	// }
 
-	if req, err = http.ReadRequest(bufio.NewReader(bytes.NewReader(realRequest))); err != nil {
+	// if realRequest, err = snappy.Decode(nil, realRequest); err != nil {
+	// 	return
+	// }
+
+	if req, err = http.ReadRequest(bufio.NewReader(tunnelConn)); err != nil {
 		return
 	}
 
 	var (
-		port        string
+		https       = req.Header.Get("Https")
+		port        = "80"
 		hostport    = req.Host
 		hostandport = strings.Split(hostport, ":")
 		host        = hostandport[0]
 		remoteConn  net.Conn
 	)
-	port = "80"
 	if https == "true" {
 		port = "443"
 	}

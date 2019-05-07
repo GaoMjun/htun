@@ -17,16 +17,17 @@ func init() {
 
 func TestHtun(t *testing.T) {
 	var (
-		// server    = Server{Addr: "127.0.0.1:8888"}
+		server    = Server{Addr: "127.0.0.1:8888"}
 		ca, pk, _ = LoadCert("htun.cer", "htun.key")
 		client    = Client{
 			LocalAddr:  ":19999",
-			ServerAddr: "http://test.ceewa.com/",
+			ServerAddr: "http://test.ceewa.com",
+			ServerHost: "127.0.0.1:8888",
 			CA:         ca,
 			PK:         pk,
 		}
 	)
 
-	// go server.Run("", "")
+	go server.Run("", "")
 	client.Run()
 }

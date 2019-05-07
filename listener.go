@@ -2,9 +2,12 @@ package htun
 
 import (
 	"errors"
-	"log"
 	"net"
 	"time"
+)
+
+var (
+	ErrNotError = errors.New("not error")
 )
 
 type Listener struct {
@@ -27,16 +30,13 @@ func (self *Listener) Accept() (conn net.Conn, err error) {
 		self.conn = nil
 		return
 	}
-	log.Println("wait...")
+
 	<-self.closeCh
-	err = errors.New("not error")
-	log.Println("end...")
+	err = ErrNotError
 	return
 }
 
 func (self *Listener) Close() (err error) {
-	log.Println("close...")
-	self.closeCh <- true
 	return
 }
 
