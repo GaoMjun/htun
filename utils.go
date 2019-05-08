@@ -13,8 +13,10 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -188,5 +190,21 @@ func DialHttp(rawurl, ip string) (conn net.Conn, err error) {
 		conn = tls.Client(conn, tlsConfig)
 	}
 
+	return
+}
+
+func getHostPort(req *http.Request, https bool) (hostport string) {
+	var (
+		hostandport = strings.Split(req.Host, ":")
+		host        = hostandport[0]
+		port        = "80"
+	)
+	if https {
+		port = "443"
+	}
+	if len(hostandport) == 2 {
+		port = hostandport[1]
+	}
+	hostport = fmt.Sprintf("%s:%s", host, port)
 	return
 }
