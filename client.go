@@ -154,8 +154,6 @@ func (self *Client) DoRequest(w http.ResponseWriter, r *http.Request, body io.Re
 		}
 	}()
 
-	// body = NewXorReader(body, self.Key)
-
 	if localConn, _, err = w.(http.Hijacker).Hijack(); err != nil {
 		return
 	}
