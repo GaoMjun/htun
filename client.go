@@ -112,6 +112,8 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 	if reqBytes, err = httputil.DumpRequest(r, true); err != nil {
 		return
 	}
+	fmt.Println(string(reqBytes))
+	fmt.Println("##################")
 
 	enReqBytes := make([]byte, len(reqBytes))
 	xor(reqBytes, enReqBytes, self.Key)

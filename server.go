@@ -3,7 +3,6 @@ package htun
 import (
 	"bufio"
 	"crypto/tls"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -25,7 +24,7 @@ func (self *Server) Run(capath, pkpath string) (err error) {
 func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
-		https    = r.Header.Get("Https")
+		https    = false
 		req      *http.Request
 		reqBytes []byte
 	)
@@ -34,6 +33,10 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 		}
 	}()
+
+	if r.Header.Get("Https") == "true" {
+		https = true
+	}
 
 	if req, err = http.ReadRequest(bufio.NewReader(NewXorReader(r.Body, self.Key))); err != nil {
 		return
@@ -45,19 +48,10 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		hostandport = strings.Split(req.Host, ":")
-		host        = hostandport[0]
-		port        = "80"
-		hostport    string
-		remoteConn  net.Conn
+		hostport   = getHostPort(req, https)
+		remoteConn net.Conn
 	)
-	if https == "true" {
-		port = "443"
-	}
-	if len(hostandport) == 2 {
-		port = hostandport[1]
-	}
-	hostport = fmt.Sprintf("%s:%s", host, port)
+
 	log.Println(hostport)
 
 	if remoteConn, err = net.Dial("tcp", hostport); err != nil {
@@ -65,8 +59,8 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	}
 	defer remoteConn.Close()
 
-	if https == "true" {
-		tlsConfig := &tls.Config{ServerName: host}
+	if https {
+		tlsConfig := &tls.Config{ServerName: strings.Split(req.Host, ":")[0]}
 		remoteConn = tls.Client(remoteConn, tlsConfig)
 	}
 
@@ -79,4 +73,6 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	io.Copy(w, NewXorReader(remoteConn, self.Key))
+
+	w.(http.Flusher).Flush()
 }
