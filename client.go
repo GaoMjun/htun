@@ -22,6 +22,7 @@ type Client struct {
 	HttpClient  *http.Client
 	CA          *x509.Certificate
 	PK          *rsa.PrivateKey
+	Key         []byte
 }
 
 func (self *Client) Run() (err error) {
@@ -90,7 +91,9 @@ func (self *Client) handleHttp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	self.DoRequest(w, r, bytes.NewReader(bs), false)
+	enbs := make([]byte, len(bs))
+	xor(bs, enbs, self.Key)
+	self.DoRequest(w, r, bytes.NewReader(enbs), false)
 }
 
 func (self *Client) handleHttps(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +135,9 @@ func (self *Client) handleHttps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	self.DoRequest(w, r, bytes.NewReader(bs), true)
+	enbs := make([]byte, len(bs))
+	xor(bs, enbs, self.Key)
+	self.DoRequest(w, r, bytes.NewReader(enbs), true)
 }
 
 func (self *Client) DoRequest(w http.ResponseWriter, r *http.Request, body io.Reader, https bool) {
@@ -148,6 +153,8 @@ func (self *Client) DoRequest(w http.ResponseWriter, r *http.Request, body io.Re
 			log.Println(err)
 		}
 	}()
+
+	// body = NewXorReader(body, self.Key)
 
 	if localConn, _, err = w.(http.Hijacker).Hijack(); err != nil {
 		return
@@ -172,5 +179,5 @@ func (self *Client) DoRequest(w http.ResponseWriter, r *http.Request, body io.Re
 	}
 	defer resp.Body.Close()
 
-	io.Copy(localConn, resp.Body)
+	io.Copy(localConn, NewXorReader(resp.Body, self.Key))
 }

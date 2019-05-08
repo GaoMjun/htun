@@ -14,14 +14,15 @@ import (
 
 type Server struct {
 	Addr string
+	Key  []byte
 }
 
 func (self *Server) Run(capath, pkpath string) (err error) {
-	err = http.ListenAndServe(self.Addr, http.HandlerFunc(handleHttp))
+	err = http.ListenAndServe(self.Addr, http.HandlerFunc(self.handleHttp))
 	return
 }
 
-func handleHttp(w http.ResponseWriter, r *http.Request) {
+func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	var (
 		err      error
 		https    = r.Header.Get("Https")
@@ -34,7 +35,7 @@ func handleHttp(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	if req, err = http.ReadRequest(bufio.NewReader(r.Body)); err != nil {
+	if req, err = http.ReadRequest(bufio.NewReader(NewXorReader(r.Body, self.Key))); err != nil {
 		return
 	}
 	req.RequestURI = ""
@@ -77,5 +78,5 @@ func handleHttp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
 
-	io.Copy(w, remoteConn)
+	io.Copy(w, NewXorReader(remoteConn, self.Key))
 }

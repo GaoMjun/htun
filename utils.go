@@ -208,3 +208,14 @@ func getHostPort(req *http.Request, https bool) (hostport string) {
 	hostport = fmt.Sprintf("%s:%s", host, port)
 	return
 }
+
+func xor(i, o, key []byte) {
+	for i, b := range i {
+		for j := 0; j < len(key); j++ {
+			b ^= key[j]
+		}
+
+		o[i] = b
+	}
+	return
+}

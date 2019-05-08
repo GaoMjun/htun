@@ -25,14 +25,18 @@ func init() {
 
 func TestHtun(t *testing.T) {
 	var (
-		server    = Server{Addr: "127.0.0.1:8888"}
+		key = []byte("12345")
+
 		ca, pk, _ = LoadCert("htun.cer", "htun.key")
-		client    = Client{
+
+		server = Server{Addr: "127.0.0.1:8888", Key: key}
+		client = Client{
 			LocalAddr:  ":19999",
-			ServerAddr: "http://test.ceewa.com",
-			ServerHost: "127.0.0.1:8888",
+			ServerAddr: "http://live.ceewa.com",
+			ServerHost: "183.131.200.75:80",
 			CA:         ca,
 			PK:         pk,
+			Key:        key,
 		}
 	)
 
