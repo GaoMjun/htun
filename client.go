@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -96,7 +97,7 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 	var (
 		err      error
 		reqBytes []byte
-		url      = self.ServerAddr + r.URL.Path
+		url      = self.ServerAddr + "/" + hex.EncodeToString([]byte(r.URL.Path))
 		req      *http.Request
 		resp     *http.Response
 	)
