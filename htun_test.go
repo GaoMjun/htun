@@ -32,8 +32,8 @@ func TestHtun(t *testing.T) {
 		server = Server{Addr: "127.0.0.1:8888", Key: key}
 		client = Client{
 			LocalAddr:  ":19999",
-			ServerAddr: "http://test2.ceewa.com",
-			ServerHost: "180.96.32.99:80",
+			ServerAddr: "http://1.cdn.dnsv1.com",
+			// ServerHost: "180.96.32.99:80",
 			CA:         ca,
 			PK:         pk,
 			Key:        key,
