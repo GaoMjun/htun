@@ -3,6 +3,7 @@ package htun
 import (
 	"bufio"
 	"crypto/tls"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -31,11 +32,18 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if err != nil {
 			log.Println(err)
+
+			w.Write(index)
 		}
 	}()
 
 	if r.Header.Get("Https") == "true" {
 		https = true
+	} else if r.Header.Get("Https") == "false" {
+		https = false
+	} else {
+		err = errors.New("no [Https] header")
+		return
 	}
 
 	if req, err = http.ReadRequest(bufio.NewReader(NewXorReader(r.Body, self.Key))); err != nil {
