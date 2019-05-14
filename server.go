@@ -61,6 +61,8 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	)
 
 	log.Println(hostport)
+	// fmt.Println(string(reqBytes))
+	// fmt.Println("##################")
 
 	if remoteConn, err = net.Dial("tcp", hostport); err != nil {
 		return
@@ -79,8 +81,7 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Transfer-Encoding", "chunked")
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-
-	io.Copy(w, NewXorReader(remoteConn, self.Key))
-
 	w.(http.Flusher).Flush()
+
+	io.CopyBuffer(w, NewXorReader(remoteConn, self.Key), make([]byte, 1024))
 }

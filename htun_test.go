@@ -16,7 +16,7 @@ import (
 )
 
 func init() {
-	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
+	log.SetFlags(log.Ltime | log.Lmicroseconds | log.Lshortfile)
 
 	go func() {
 		log.Println(http.ListenAndServe(":6061", nil))
@@ -33,7 +33,7 @@ func TestHtun(t *testing.T) {
 		client = Client{
 			LocalAddr:  ":19999",
 			ServerAddr: "http://1.cdn.dnsv1.com",
-			// ServerHost: "180.96.32.99:80",
+			ServerHost: "180.96.32.99:80",
 			CA:         ca,
 			PK:         pk,
 			Key:        key,

@@ -70,27 +70,31 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 			log.Println(err)
 		}
 	}()
-	for {
-		if req, err = http.ReadRequest(bufio.NewReader(localConn)); err != nil {
-			return
-		}
 
-		if req.Method == http.MethodConnect {
-			if _, err = fmt.Fprint(localConn, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
-				return
-			}
-
-			tlsConfig := &tls.Config{
-				GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
-					return Cert(info.ServerName, self.CA, self.PK)
-				}}
-			localConn = tls.Server(localConn, tlsConfig)
-			self.handleConn(localConn, true)
-			return
-		}
-
-		self.doRequest(localConn, req, https)
+	if req, err = http.ReadRequest(bufio.NewReader(localConn)); err != nil {
+		return
 	}
+
+	if req.Method == http.MethodConnect {
+		if _, err = fmt.Fprint(localConn, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
+			return
+		}
+
+		if req.URL.Port() == "80" {
+			self.handleConn(localConn, false)
+			return
+		}
+
+		tlsConfig := &tls.Config{
+			GetCertificate: func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				return Cert(info.ServerName, self.CA, self.PK)
+			}}
+		localConn = tls.Server(localConn, tlsConfig)
+		self.handleConn(localConn, true)
+		return
+	}
+
+	self.doRequest(localConn, req, https)
 }
 
 func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
@@ -107,7 +111,7 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 		}
 	}()
 
-	log.Println(getHostPort(r, https))
+	log.Println(getHostPort(r, https), r.URL.Path)
 
 	if reqBytes, err = httputil.DumpRequest(r, true); err != nil {
 		return
@@ -126,7 +130,7 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 	if ua := r.Header.Get("User-Agent"); len(ua) > 0 {
 		req.Header.Set("User-Agent", ua)
 	}
-	req.Header.Set("Content-Type", "image/jpeg")
+	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("Https", "false")
 	if https {
 		req.Header.Set("Https", "true")
