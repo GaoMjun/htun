@@ -105,7 +105,7 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	w.(http.Flusher).Flush()
 
 	// body
-	resp.Body
+	// resp.Body
 
 	buffer := make([]byte, 1024*32)
 	n := 0
