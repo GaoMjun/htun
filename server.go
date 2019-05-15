@@ -85,6 +85,28 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 
+	var (
+		resp      *http.Response
+		respBytes []byte
+	)
+	if resp, err = http.ReadResponse(bufio.NewReader(remoteConn), nil); err != nil {
+		return
+	}
+
+	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
+		return
+	}
+
+	// header
+	xor(respBytes, respBytes, self.Key)
+	if _, err = w.Write(respBytes); err != nil {
+		return
+	}
+	w.(http.Flusher).Flush()
+
+	// body
+	resp.Body
+
 	buffer := make([]byte, 1024*32)
 	n := 0
 	rd := NewXorReader(remoteConn, self.Key)
