@@ -1,6 +1,8 @@
 package htun
 
-import "io"
+import (
+	"io"
+)
 
 type XorReader struct {
 	r    io.Reader
@@ -25,6 +27,6 @@ func (self *XorReader) Read(p []byte) (n int, err error) {
 		self.rbuf = make([]byte, n)
 	}
 	xor(p[:n], self.rbuf, self.k)
-	copy(p, self.rbuf)
+	copy(p[:n], self.rbuf)
 	return
 }

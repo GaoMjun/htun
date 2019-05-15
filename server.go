@@ -24,17 +24,23 @@ func (self *Server) Run(capath, pkpath string) (err error) {
 
 func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	var (
-		err      error
-		https    = false
-		req      *http.Request
-		reqBytes []byte
+		err        error
+		https      = false
+		req        *http.Request
+		reqBytes   []byte
+		writen     = 0
+		hostport   string
+		remoteConn net.Conn
 	)
 	defer func() {
-		if err != nil {
+		if err != nil && err != io.EOF {
 			log.Println(err)
 
 			w.Write(index)
+			return
 		}
+
+		log.Println(hostport, writen)
 	}()
 
 	if r.Header.Get("Https") == "true" {
@@ -49,18 +55,14 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	if req, err = http.ReadRequest(bufio.NewReader(NewXorReader(r.Body, self.Key))); err != nil {
 		return
 	}
+	hostport = getHostPort(req, https)
+
 	req.RequestURI = ""
 	req.Header.Set("Connection", "close")
 	if reqBytes, err = httputil.DumpRequest(req, true); err != nil {
 		return
 	}
 
-	var (
-		hostport   = getHostPort(req, https)
-		remoteConn net.Conn
-	)
-
-	log.Println(hostport)
 	// fmt.Println(string(reqBytes))
 	// fmt.Println("##################")
 
@@ -83,5 +85,19 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.(http.Flusher).Flush()
 
-	io.CopyBuffer(w, NewXorReader(remoteConn, self.Key), make([]byte, 1024))
+	buffer := make([]byte, 1024*32)
+	n := 0
+	rd := NewXorReader(remoteConn, self.Key)
+	for {
+		if n, err = rd.Read(buffer); err != nil {
+			return
+		}
+
+		if _, err = w.Write(buffer[:n]); err != nil {
+			return
+		}
+		w.(http.Flusher).Flush()
+
+		writen += n
+	}
 }

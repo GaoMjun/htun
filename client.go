@@ -52,6 +52,7 @@ func (self *Client) Run() (err error) {
 
 	for {
 		if conn, err := l.Accept(); err == nil {
+
 			go self.handleConn(conn, false)
 			continue
 		}
@@ -71,9 +72,25 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 		}
 	}()
 
+	// var remoteConn net.Conn
+	// if remoteConn, err = net.Dial("tcp", self.ServerHost); err != nil {
+	// 	return
+	// }
+
+	// Process(localConn, remoteConn, self.Key, "test.com", false, self.CA, self.PK)
+
+	// return
+
 	if req, err = http.ReadRequest(bufio.NewReader(localConn)); err != nil {
 		return
 	}
+
+	// hostname := req.Host
+	// if strings.Contains(hostname, ".googlevideo.com") {
+	// 	bs, _ := httputil.DumpRequest(req, true)
+	// 	fmt.Print(string(bs))
+	// 	fmt.Println("##################")
+	// }
 
 	if req.Method == http.MethodConnect {
 		if _, err = fmt.Fprint(localConn, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
@@ -106,12 +123,12 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 		resp     *http.Response
 	)
 	defer func() {
-		if err != nil {
+		if err != nil && err != io.EOF {
 			log.Println(err)
 		}
 	}()
 
-	log.Println(getHostPort(r, https), r.URL.Path)
+	log.Println(getHostPort(r, https))
 
 	if reqBytes, err = httputil.DumpRequest(r, true); err != nil {
 		return
@@ -127,19 +144,25 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 		return
 	}
 
-	if ua := r.Header.Get("User-Agent"); len(ua) > 0 {
-		req.Header.Set("User-Agent", ua)
-	}
+	req.Header.Set("User-Agent", r.Header.Get("User-Agent"))
 	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("Https", "false")
-	if https {
-		req.Header.Set("Https", "true")
-	}
+	req.Header.Set("Https", fmt.Sprintf("%v", https))
 
 	if resp, err = self.HttpClient.Do(req); err != nil {
 		return
 	}
 	defer resp.Body.Close()
 
-	io.Copy(localConn, NewXorReader(resp.Body, self.Key))
+	buffer := make([]byte, 1024*32)
+	n := 0
+	rd := NewXorReader(resp.Body, self.Key)
+	for {
+		if n, err = rd.Read(buffer); err != nil {
+			return
+		}
+
+		if _, err = localConn.Write(buffer[:n]); err != nil {
+			return
+		}
+	}
 }

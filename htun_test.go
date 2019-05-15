@@ -195,3 +195,7 @@ func TestMIMT(t *testing.T) {
 		}
 	}
 }
+
+func TestTrue(t *testing.T) {
+	fmt.Printf("%v", false)
+}
