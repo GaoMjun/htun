@@ -28,7 +28,6 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 		https      = false
 		req        *http.Request
 		reqBytes   []byte
-		writen     = 0
 		hostport   string
 		remoteConn net.Conn
 	)
@@ -39,8 +38,6 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 			w.Write(index)
 			return
 		}
-
-		log.Println(hostport, writen)
 	}()
 
 	if r.Header.Get("Https") == "true" {
@@ -56,15 +53,13 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	hostport = getHostPort(req, https)
+	log.Println(hostport)
 
 	req.RequestURI = ""
 	req.Header.Set("Connection", "close")
 	if reqBytes, err = httputil.DumpRequest(req, true); err != nil {
 		return
 	}
-
-	// fmt.Println(string(reqBytes))
-	// fmt.Println("##################")
 
 	if remoteConn, err = net.Dial("tcp", hostport); err != nil {
 		return
@@ -88,16 +83,26 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	var (
 		resp      *http.Response
 		respBytes []byte
+		chunked   bool
 	)
 	if resp, err = http.ReadResponse(bufio.NewReader(remoteConn), nil); err != nil {
 		return
+	}
+
+	for _, v := range resp.TransferEncoding {
+		if v == "chunked" {
+			chunked = true
+			break
+		}
 	}
 
 	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
 		return
 	}
 
-	// header
+	// fmt.Print(string(respBytes))
+	// fmt.Println("##################")
+
 	xor(respBytes, respBytes, self.Key)
 	if _, err = w.Write(respBytes); err != nil {
 		return
@@ -105,21 +110,25 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	w.(http.Flusher).Flush()
 
 	// body
-	// resp.Body
+	var reader io.Reader = NewXorReader(resp.Body, self.Key)
+	if chunked {
+		reader = NewXorReader(NewChunkReader(resp.Body), self.Key)
+	}
 
 	buffer := make([]byte, 1024*32)
 	n := 0
-	rd := NewXorReader(remoteConn, self.Key)
 	for {
-		if n, err = rd.Read(buffer); err != nil {
-			return
+		n, err = reader.Read(buffer)
+		if n > 0 {
+			if _, err2 := w.Write(buffer[:n]); err2 != nil {
+				err = err2
+				return
+			}
+			w.(http.Flusher).Flush()
 		}
 
-		if _, err = w.Write(buffer[:n]); err != nil {
+		if err != nil {
 			return
 		}
-		w.(http.Flusher).Flush()
-
-		writen += n
 	}
 }

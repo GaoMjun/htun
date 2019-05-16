@@ -157,11 +157,14 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 	n := 0
 	rd := NewXorReader(resp.Body, self.Key)
 	for {
-		if n, err = rd.Read(buffer); err != nil {
-			return
+		n, err = rd.Read(buffer)
+		if n > 0 {
+			if _, err = localConn.Write(buffer[:n]); err != nil {
+				return
+			}
 		}
 
-		if _, err = localConn.Write(buffer[:n]); err != nil {
+		if err != nil {
 			return
 		}
 	}

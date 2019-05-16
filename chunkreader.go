@@ -21,15 +21,15 @@ func NewChunkReader(r io.Reader) (cr *ChunkReader) {
 func (self *ChunkReader) Read(p []byte) (n int, err error) {
 	self.buffer.Reset()
 
-	if n, err = self.r.Read(p[:len(p)-8]); err != nil && n <= 0 {
-		n = copy(p, []byte("0\r\n"))
-		return
+	n, err = self.r.Read(p[:len(p)-8])
+	if n > 0 {
+		fmt.Fprintf(self.buffer, "%x\r\n", n)
+		self.buffer.Write(p[:n])
+		self.buffer.WriteString("\r\n")
 	}
-	err = nil
-
-	fmt.Fprintf(self.buffer, "%x\r\n", n)
-	self.buffer.Write(p[:n])
-	self.buffer.WriteString("\r\n")
+	if err != nil {
+		self.buffer.WriteString("0\r\n\r\n")
+	}
 
 	n = copy(p, self.buffer.Bytes())
 	return

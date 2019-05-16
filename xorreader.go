@@ -18,15 +18,14 @@ func NewXorReader(r io.Reader, key []byte) (xer *XorReader) {
 }
 
 func (self *XorReader) Read(p []byte) (n int, err error) {
-	if n, err = self.r.Read(p); err != nil && n <= 0 {
-		return
+	n, err = self.r.Read(p)
+	if n > 0 {
+		if n > len(self.rbuf) {
+			self.rbuf = make([]byte, n)
+		}
+		xor(p[:n], self.rbuf, self.k)
+		copy(p[:n], self.rbuf)
 	}
-	err = nil
 
-	if n > len(self.rbuf) {
-		self.rbuf = make([]byte, n)
-	}
-	xor(p[:n], self.rbuf, self.k)
-	copy(p[:n], self.rbuf)
 	return
 }

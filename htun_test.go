@@ -33,10 +33,10 @@ func TestHtun(t *testing.T) {
 		client = Client{
 			LocalAddr:  ":19999",
 			ServerAddr: "http://1.cdn.dnsv1.com",
-			ServerHost: "180.96.32.99:80",
-			CA:         ca,
-			PK:         pk,
-			Key:        key,
+			// ServerHost: "180.96.32.98:80",
+			CA:  ca,
+			PK:  pk,
+			Key: key,
 		}
 	)
 
@@ -198,4 +198,15 @@ func TestMIMT(t *testing.T) {
 
 func TestTrue(t *testing.T) {
 	fmt.Printf("%v", false)
+}
+
+func TestHeader(t *testing.T) {
+	s := "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
+
+	resp, err := http.ReadResponse(bufio.NewReader(strings.NewReader(s)), nil)
+	if err != nil {
+		return
+	}
+
+	fmt.Println(resp.Header)
 }
