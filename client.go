@@ -7,12 +7,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
+
+	"github.com/GaoMjun/ladder"
 )
 
 type Client struct {
@@ -23,6 +26,38 @@ type Client struct {
 	CA         *x509.Certificate
 	PK         *rsa.PrivateKey
 	Key        []byte
+}
+
+func ClientRun(args []string) (err error) {
+	flags := flag.NewFlagSet("client", flag.PanicOnError)
+	addr := flags.String("l", ":80", "server listen address")
+	pass := flags.String("k", "", "password")
+	sa := flags.String("sa", "", "server http address")
+	sh := flags.String("sh", "", "server http host")
+	capath := flags.String("ca", "", "certificate file")
+	pkpath := flags.String("pk", "", "private key file")
+	flags.Parse(args)
+
+	var (
+		ca *x509.Certificate
+		pk *rsa.PrivateKey
+	)
+
+	if ca, pk, err = LoadCert(*capath, *pkpath); err != nil {
+		return
+	}
+
+	client := Client{
+		LocalAddr:  *addr,
+		ServerAddr: *sa,
+		ServerHost: *sh,
+		CA:         ca,
+		PK:         pk,
+		Key:        []byte(*pass),
+	}
+	err = client.Run()
+
+	return
 }
 
 func (self *Client) Run() (err error) {
@@ -72,25 +107,9 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 		}
 	}()
 
-	// var remoteConn net.Conn
-	// if remoteConn, err = net.Dial("tcp", self.ServerHost); err != nil {
-	// 	return
-	// }
-
-	// Process(localConn, remoteConn, self.Key, "test.com", false, self.CA, self.PK)
-
-	// return
-
 	if req, err = http.ReadRequest(bufio.NewReader(localConn)); err != nil {
 		return
 	}
-
-	// hostname := req.Host
-	// if strings.Contains(hostname, ".googlevideo.com") {
-	// 	bs, _ := httputil.DumpRequest(req, true)
-	// 	fmt.Print(string(bs))
-	// 	fmt.Println("##################")
-	// }
 
 	if req.Method == http.MethodConnect {
 		if _, err = fmt.Fprint(localConn, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
@@ -133,8 +152,6 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 	if reqBytes, err = httputil.DumpRequest(r, true); err != nil {
 		return
 	}
-	// fmt.Println(string(reqBytes))
-	// fmt.Println("##################")
 
 	enReqBytes := make([]byte, len(reqBytes))
 	xor(reqBytes, enReqBytes, self.Key)
@@ -144,6 +161,8 @@ func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
 		return
 	}
 
+	token, _ := ladder.GenerateToken(string(self.Key), string(self.Key))
+	req.Header.Set("Token", token)
 	req.Header.Set("User-Agent", r.Header.Get("User-Agent"))
 	req.Header.Set("Content-Type", "application/octet-stream")
 	req.Header.Set("Https", fmt.Sprintf("%v", https))

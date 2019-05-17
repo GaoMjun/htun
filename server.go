@@ -4,12 +4,16 @@ import (
 	"bufio"
 	"crypto/tls"
 	"errors"
+	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"strings"
+
+	"github.com/GaoMjun/ladder"
 )
 
 type Server struct {
@@ -17,7 +21,19 @@ type Server struct {
 	Key  []byte
 }
 
-func (self *Server) Run(capath, pkpath string) (err error) {
+func ServerRun(args []string) (err error) {
+	flags := flag.NewFlagSet("server", flag.PanicOnError)
+	addr := flags.String("l", ":80", "server listen address")
+	pass := flags.String("k", "", "password")
+	flags.Parse(args)
+
+	server := Server{Addr: *addr, Key: []byte(*pass)}
+	err = server.Run()
+
+	return
+}
+
+func (self *Server) Run() (err error) {
 	err = http.ListenAndServe(self.Addr, http.HandlerFunc(self.handleHttp))
 	return
 }
@@ -30,6 +46,8 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 		reqBytes   []byte
 		hostport   string
 		remoteConn net.Conn
+		token      = r.Header.Get("Token")
+		tokenOk    bool
 	)
 	defer func() {
 		if err != nil && err != io.EOF {
@@ -39,6 +57,20 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}()
+
+	if len(token) <= 0 {
+		err = errors.New("token invalid, no token")
+		return
+	}
+
+	if tokenOk, err = ladder.CheckToken(string(self.Key), string(self.Key), token); err != nil {
+		return
+	}
+
+	if tokenOk != true {
+		err = errors.New(fmt.Sprint("token invalid,", token))
+		return
+	}
 
 	if r.Header.Get("Https") == "true" {
 		https = true
@@ -100,16 +132,12 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// fmt.Print(string(respBytes))
-	// fmt.Println("##################")
-
 	xor(respBytes, respBytes, self.Key)
 	if _, err = w.Write(respBytes); err != nil {
 		return
 	}
 	w.(http.Flusher).Flush()
 
-	// body
 	var reader io.Reader = NewXorReader(resp.Body, self.Key)
 	if chunked {
 		reader = NewXorReader(NewChunkReader(resp.Body), self.Key)
