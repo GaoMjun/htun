@@ -26,6 +26,8 @@ type Client struct {
 	CA         *x509.Certificate
 	PK         *rsa.PrivateKey
 	Key        []byte
+
+	connPool *ConnPool
 }
 
 func ClientRun(args []string) (err error) {
@@ -54,6 +56,7 @@ func ClientRun(args []string) (err error) {
 		CA:         ca,
 		PK:         pk,
 		Key:        []byte(*pass),
+		connPool:   NewConnPool(),
 	}
 	err = client.Run()
 
@@ -63,10 +66,15 @@ func ClientRun(args []string) (err error) {
 func (self *Client) Run() (err error) {
 	self.HttpClient = &http.Client{
 		Transport: &http.Transport{
-			Dial: func(network, addr string) (net.Conn, error) {
+			Dial: func(network, addr string) (conn net.Conn, err error) {
+				if conn = self.connPool.Get(); conn != nil {
+					return
+				}
+
 				if self.ServerHost != "" {
 					addr = self.ServerHost
 				}
+
 				return net.Dial(network, addr)
 			},
 		},
