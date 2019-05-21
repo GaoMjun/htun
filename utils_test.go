@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"net/http"
+	"net/http/httputil"
 	"os"
 	"testing"
 )
@@ -88,4 +90,18 @@ func TestHTTPCONNECT(t *testing.T) {
 	}
 
 	fmt.Println(string(buffer[:n]))
+}
+
+func TestHTTPSRequest(t *testing.T) {
+	req, _ := http.NewRequest("GET", "https://baidu.com/", nil)
+	req2, _ := http.NewRequest("GET", "http://baidu.com/", nil)
+
+	log.Println(req.URL)
+	log.Println(req2.URL)
+
+	bs, _ := httputil.DumpRequest(req, true)
+	bs2, _ := httputil.DumpRequest(req2, true)
+
+	fmt.Print(string(bs))
+	fmt.Print(string(bs2))
 }

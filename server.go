@@ -2,23 +2,21 @@ package htun
 
 import (
 	"bufio"
-	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/http/httputil"
-	"strings"
 
 	"github.com/GaoMjun/ladder"
 )
 
 type Server struct {
-	Addr string
-	Key  []byte
+	Addr       string
+	Key        []byte
+	HttpClient *http.Client
 }
 
 func ServerRun(args []string) (err error) {
@@ -27,7 +25,17 @@ func ServerRun(args []string) (err error) {
 	pass := flags.String("k", "", "password")
 	flags.Parse(args)
 
-	server := Server{Addr: *addr, Key: []byte(*pass)}
+	server := Server{
+		Addr: *addr,
+		Key:  []byte(*pass),
+		HttpClient: &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:        0,
+				MaxIdleConnsPerHost: 128,
+				MaxConnsPerHost:     0,
+			},
+		},
+	}
 	err = server.Run()
 
 	return
@@ -40,14 +48,12 @@ func (self *Server) Run() (err error) {
 
 func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	var (
-		err        error
-		https      = false
-		req        *http.Request
-		reqBytes   []byte
-		hostport   string
-		remoteConn net.Conn
-		token      = r.Header.Get("Token")
-		tokenOk    bool
+		err     error
+		https   = false
+		req     *http.Request
+		token   = r.Header.Get("Token")
+		tokenOk bool
+		resp    *http.Response
 	)
 	defer func() {
 		if err != nil && err != io.EOF {
@@ -84,26 +90,14 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	if req, err = http.ReadRequest(bufio.NewReader(NewXorReader(r.Body, self.Key))); err != nil {
 		return
 	}
-	hostport = getHostPort(req, https)
-	log.Println(hostport)
-
 	req.RequestURI = ""
-	req.Header.Set("Connection", "close")
-	if reqBytes, err = httputil.DumpRequest(req, true); err != nil {
-		return
-	}
-
-	if remoteConn, err = net.Dial("tcp", hostport); err != nil {
-		return
-	}
-	defer remoteConn.Close()
-
+	req.URL.Host = req.Host
 	if https {
-		tlsConfig := &tls.Config{ServerName: strings.Split(req.Host, ":")[0]}
-		remoteConn = tls.Client(remoteConn, tlsConfig)
+		req.URL.Scheme = "https"
 	}
+	log.Println(getHostPort(req, https))
 
-	if _, err = remoteConn.Write(reqBytes); err != nil {
+	if resp, err = self.HttpClient.Do(req); err != nil {
 		return
 	}
 
@@ -113,13 +107,9 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	w.(http.Flusher).Flush()
 
 	var (
-		resp      *http.Response
 		respBytes []byte
 		chunked   bool
 	)
-	if resp, err = http.ReadResponse(bufio.NewReader(remoteConn), nil); err != nil {
-		return
-	}
 
 	for _, v := range resp.TransferEncoding {
 		if v == "chunked" {

@@ -40,7 +40,7 @@ func TestHtun(t *testing.T) {
 		}
 	)
 
-	go server.Run("", "")
+	go server.Run()
 	client.Run()
 }
 
