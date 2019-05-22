@@ -34,6 +34,9 @@ func ServerRun(args []string) (err error) {
 				MaxIdleConnsPerHost: 128,
 				MaxConnsPerHost:     0,
 			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 		},
 	}
 	err = server.Run()
