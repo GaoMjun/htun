@@ -90,11 +90,16 @@ func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
 	if req, err = http.ReadRequest(bufio.NewReader(NewXorReader(r.Body, self.Key))); err != nil {
 		return
 	}
+	req.Header.Set("Connection", "Keep-Alive")
 	req.RequestURI = ""
 	req.URL.Host = req.Host
-	if https {
-		req.URL.Scheme = "https"
+	if req.URL.Scheme == "" {
+		req.URL.Scheme = "http"
+		if https {
+			req.URL.Scheme = "https"
+		}
 	}
+
 	log.Println(getHostPort(req, https))
 
 	if resp, err = self.HttpClient.Do(req); err != nil {
