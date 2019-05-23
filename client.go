@@ -30,7 +30,8 @@ type Client struct {
 
 func ClientRun(args []string) (err error) {
 	flags := flag.NewFlagSet("client", flag.PanicOnError)
-	addr := flags.String("l", ":80", "server listen address")
+	addr := flags.String("l", ":80", "http server listen address")
+	socksaddr := flags.String("sl", "", "socks5 server listen address")
 	pass := flags.String("k", "", "password")
 	sa := flags.String("sa", "", "server http address")
 	sh := flags.String("sh", "", "server http host")
@@ -55,6 +56,11 @@ func ClientRun(args []string) (err error) {
 		PK:         pk,
 		Key:        []byte(*pass),
 	}
+
+	if len(*socksaddr) > 0 {
+		go socksServerRun(*socksaddr, client.handleConn)
+	}
+
 	err = client.Run()
 
 	return
