@@ -13,9 +13,14 @@ type WrapperConn struct {
 	handshake bool
 }
 
+func NewWrapperConn(c net.Conn, hostport string) (wc *WrapperConn) {
+	wc = &WrapperConn{c, hostport, true}
+	return
+}
+
 func (self *WrapperConn) Read(b []byte) (n int, err error) {
 	if self.handshake {
-		fake := []byte(fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", self.hostport))
+		fake := []byte(fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", self.hostport, self.hostport))
 		if len(b) < len(fake) {
 			err = errors.New("read buffer not enough")
 			return
