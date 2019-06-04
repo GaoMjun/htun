@@ -1,14 +1,15 @@
 package htun
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
-	"net/http/httputil"
+
+	"github.com/GaoMjun/ladder/httpstream"
 
 	"github.com/GaoMjun/ladder"
 )
@@ -45,116 +46,79 @@ func ServerRun(args []string) (err error) {
 }
 
 func (self *Server) Run() (err error) {
-	err = http.ListenAndServe(self.Addr, http.HandlerFunc(self.handleHttp))
+	upgrader := httpstream.NewUpgrader()
+	go func() {
+		for {
+			stream := upgrader.Accept()
+			go self.handleStream(stream)
+		}
+	}()
+
+	err = http.ListenAndServe(self.Addr, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			tokenOk    bool
+			token      = r.Header.Get("HTTPStream-Token")
+			streamid   = r.Header.Get("HTTPStream-Key")
+			remoteHost = r.Header.Get("HTTPStream-Host")
+		)
+		defer func() {
+			if err != nil && err != io.EOF {
+				log.Println(err)
+
+				w.Write(index)
+				return
+			}
+		}()
+
+		if len(token) <= 0 {
+			err = errors.New("token invalid, no token")
+			return
+		}
+
+		if tokenOk, err = ladder.CheckToken(string(self.Key), string(self.Key), token); err != nil {
+			return
+		}
+
+		if tokenOk != true {
+			err = errors.New(fmt.Sprint("token invalid,", token))
+			return
+		}
+
+		if len(streamid) <= 0 {
+			err = errors.New("no streamid")
+			return
+		}
+
+		if len(remoteHost) <= 0 {
+			err = errors.New("no remote host")
+			return
+		}
+
+		upgrader.Upgrade(w, r)
+	}))
 	return
 }
 
-func (self *Server) handleHttp(w http.ResponseWriter, r *http.Request) {
+func (self *Server) handleStream(tunnelConn *httpstream.Conn) {
+	defer tunnelConn.Close()
+
 	var (
-		err     error
-		https   = false
-		req     *http.Request
-		token   = r.Header.Get("Token")
-		tokenOk bool
-		resp    *http.Response
+		err        error
+		remoteConn net.Conn
 	)
 	defer func() {
-		if err != nil && err != io.EOF {
+		if err != nil {
 			log.Println(err)
-
-			w.Write(index)
 			return
 		}
 	}()
 
-	if len(token) <= 0 {
-		err = errors.New("token invalid, no token")
+	log.Println(tunnelConn.RemoteHost)
+	// return
+
+	if remoteConn, err = net.Dial("tcp", tunnelConn.RemoteHost); err != nil {
 		return
 	}
 
-	if tokenOk, err = ladder.CheckToken(string(self.Key), string(self.Key), token); err != nil {
-		return
-	}
-
-	if tokenOk != true {
-		err = errors.New(fmt.Sprint("token invalid,", token))
-		return
-	}
-
-	if r.Header.Get("Https") == "true" {
-		https = true
-	} else if r.Header.Get("Https") == "false" {
-		https = false
-	} else {
-		err = errors.New("no [Https] header")
-		return
-	}
-
-	if req, err = http.ReadRequest(bufio.NewReader(NewXorReader(r.Body, self.Key))); err != nil {
-		return
-	}
-	req.Header.Set("Connection", "Keep-Alive")
-	req.RequestURI = ""
-	req.URL.Host = req.Host
-	if req.URL.Scheme == "" {
-		req.URL.Scheme = "http"
-		if https {
-			req.URL.Scheme = "https"
-		}
-	}
-
-	log.Println(getHostPort(req, https))
-
-	if resp, err = self.HttpClient.Do(req); err != nil {
-		return
-	}
-
-	w.Header().Set("Transfer-Encoding", "chunked")
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.WriteHeader(http.StatusOK)
-	w.(http.Flusher).Flush()
-
-	var (
-		respBytes []byte
-		chunked   bool
-	)
-
-	for _, v := range resp.TransferEncoding {
-		if v == "chunked" {
-			chunked = true
-			break
-		}
-	}
-
-	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
-		return
-	}
-
-	xor(respBytes, respBytes, self.Key)
-	if _, err = w.Write(respBytes); err != nil {
-		return
-	}
-	w.(http.Flusher).Flush()
-
-	var reader io.Reader = NewXorReader(resp.Body, self.Key)
-	if chunked {
-		reader = NewXorReader(NewChunkReader(resp.Body), self.Key)
-	}
-
-	buffer := make([]byte, 1024*32)
-	n := 0
-	for {
-		n, err = reader.Read(buffer)
-		if n > 0 {
-			if _, err2 := w.Write(buffer[:n]); err2 != nil {
-				err = err2
-				return
-			}
-			w.(http.Flusher).Flush()
-		}
-
-		if err != nil {
-			return
-		}
-	}
+	ladder.Pipe(ladder.NewConnWithXor(tunnelConn, self.Key), remoteConn)
 }

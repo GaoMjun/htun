@@ -8,7 +8,7 @@ import (
 	"net"
 )
 
-func socksServerRun(addr string, handle func(net.Conn, bool)) {
+func socksServerRun(addr string, handle func(net.Conn)) {
 	var (
 		err        error
 		l          net.Listener
@@ -108,7 +108,7 @@ func socksServerRun(addr string, handle func(net.Conn, bool)) {
 			}
 
 			//
-			handle(&WrapperConn{conn, hostport, true}, false)
+			handle(&WrapperConn{conn, hostport, true})
 		}
 	)
 	defer func() {
