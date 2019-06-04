@@ -1,6 +1,7 @@
 package htun
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -103,8 +104,12 @@ func (self *Server) handleStream(tunnelConn *httpstream.Conn) {
 	defer tunnelConn.Close()
 
 	var (
-		err        error
-		remoteConn net.Conn
+		err           error
+		remoteConn    net.Conn
+		tunnelXorConn = ladder.NewConnWithXor(tunnelConn, self.Key)
+		host          string
+		port          int
+		raw           []byte
 	)
 	defer func() {
 		if err != nil {
@@ -113,12 +118,27 @@ func (self *Server) handleStream(tunnelConn *httpstream.Conn) {
 		}
 	}()
 
+	if host, port, raw, _, err = ladder.ParseHttpHost(bufio.NewReader(tunnelXorConn)); err != nil {
+		log.Println(err)
+		err = nil
+	}
+
+	if len(host) > 0 {
+		tunnelConn.RemoteHost = fmt.Sprintf("%s:%d", host, port)
+	}
+
 	log.Println(tunnelConn.RemoteHost)
-	// return
 
 	if remoteConn, err = net.Dial("tcp", tunnelConn.RemoteHost); err != nil {
 		return
 	}
+	defer remoteConn.Close()
 
-	ladder.Pipe(ladder.NewConnWithXor(tunnelConn, self.Key), remoteConn)
+	if len(host) > 0 {
+		if _, err = remoteConn.Write(raw); err != nil {
+			return
+		}
+	}
+
+	ladder.Pipe(tunnelXorConn, remoteConn)
 }
