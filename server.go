@@ -1,7 +1,6 @@
 package htun
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -118,7 +117,7 @@ func (self *Server) handleStream(tunnelConn *httpstream.Conn) {
 		}
 	}()
 
-	if host, port, raw, _, err = ladder.ParseHttpHost(bufio.NewReader(tunnelXorConn)); err != nil {
+	if host, port, raw, _, err = ladder.ParseHttpHost(tunnelXorConn); err != nil {
 		log.Println(err)
 		err = nil
 	}
