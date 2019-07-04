@@ -2,11 +2,9 @@ package htun
 
 import (
 	"bufio"
-	"bytes"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -14,9 +12,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-
-	"github.com/GaoMjun/ladder"
+	"net/url"
+	"strings"
 )
+
+var urlParse = url.Parse
 
 type Client struct {
 	LocalAddr  string
@@ -26,6 +26,7 @@ type Client struct {
 	CA         *x509.Certificate
 	PK         *rsa.PrivateKey
 	Key        []byte
+	Verbose    bool
 }
 
 func ClientRun(args []string) (err error) {
@@ -37,6 +38,7 @@ func ClientRun(args []string) (err error) {
 	sh := flags.String("sh", "", "server http host")
 	capath := flags.String("ca", "", "certificate file")
 	pkpath := flags.String("pk", "", "private key file")
+	verbose := flags.Bool("v", false, "verbose mode")
 	flags.Parse(args)
 
 	var (
@@ -55,6 +57,7 @@ func ClientRun(args []string) (err error) {
 		CA:         ca,
 		PK:         pk,
 		Key:        []byte(*pass),
+		Verbose:    *verbose,
 	}
 
 	if len(*socksaddr) > 0 {
@@ -79,6 +82,9 @@ func (self *Client) Run() (err error) {
 
 				return net.Dial(network, addr)
 			},
+		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
 		},
 	}
 
@@ -140,61 +146,63 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 		return
 	}
 
-	self.doRequest(localConn, req, https)
+	self.forwardRequest(localConn, req, https)
 }
 
-func (self *Client) doRequest(localConn net.Conn, r *http.Request, https bool) {
+func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https bool) {
 	var (
-		err      error
-		reqBytes []byte
-		url      = self.ServerAddr + "/" + hex.EncodeToString([]byte(r.URL.Path))
-		req      *http.Request
-		resp     *http.Response
+		err       error
+		resp      *http.Response
+		respBytes []byte
 	)
 	defer func() {
-		if err != nil && err != io.EOF {
+		if err != nil {
 			log.Println(err)
 		}
 	}()
 
-	log.Println(getHostPort(r, https))
+	req.Header.Add("xhost", req.Host)
+	if https {
+		req.Header.Add("xprotocol", "https")
+	} else {
+		req.Header.Add("xprotocol", "http")
+	}
 
-	if reqBytes, err = httputil.DumpRequest(r, true); err != nil {
+	if self.Verbose {
+		var s string
+		if https {
+			s = "https://" + req.Host + req.RequestURI
+		} else {
+			s = "http://" + req.Host + req.RequestURI
+		}
+
+		log.Println(s)
+	}
+
+	if strings.HasPrefix(req.RequestURI, "http") {
+		req.RequestURI = req.RequestURI[len("http://"+req.Host):]
+	}
+
+	if req.URL, err = urlParse(self.ServerAddr + req.RequestURI); err != nil {
 		return
 	}
 
-	enReqBytes := make([]byte, len(reqBytes))
-	xor(reqBytes, enReqBytes, self.Key)
-	body := bytes.NewReader(enReqBytes)
-
-	if req, err = http.NewRequest("POST", url, body); err != nil {
-		return
-	}
-
-	token, _ := ladder.GenerateToken(string(self.Key), string(self.Key))
-	req.Header.Set("Token", token)
-	req.Header.Set("User-Agent", r.Header.Get("User-Agent"))
-	req.Header.Set("Content-Type", "application/octet-stream")
-	req.Header.Set("Https", fmt.Sprintf("%v", https))
-	req.Header.Set("Connection", "Keep-Alive")
+	req.RequestURI = ""
+	req.Host = req.URL.Host
 
 	if resp, err = self.HttpClient.Do(req); err != nil {
 		return
 	}
 
-	buffer := make([]byte, 1024*32)
-	n := 0
-	rd := NewXorReader(resp.Body, self.Key)
-	for {
-		n, err = rd.Read(buffer)
-		if n > 0 {
-			if _, err = localConn.Write(buffer[:n]); err != nil {
-				return
-			}
-		}
+	resp.TransferEncoding = nil
 
-		if err != nil {
-			return
-		}
+	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
+		return
 	}
+
+	if _, err = localConn.Write(respBytes); err != nil {
+		return
+	}
+
+	_, err = io.Copy(localConn, resp.Body)
 }

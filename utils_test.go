@@ -93,8 +93,8 @@ func TestHTTPCONNECT(t *testing.T) {
 }
 
 func TestHTTPSRequest(t *testing.T) {
-	req, _ := http.NewRequest("GET", "https://baidu.com/", nil)
-	req2, _ := http.NewRequest("GET", "http://baidu.com/", nil)
+	req, _ := http.NewRequest("GET", "https://baidu.com/a?b=c", nil)
+	req2, _ := http.NewRequest("GET", "http://baidu.com/a?b=c", nil)
 
 	log.Println(req.URL)
 	log.Println(req2.URL)
@@ -104,4 +104,59 @@ func TestHTTPSRequest(t *testing.T) {
 
 	fmt.Print(string(bs))
 	fmt.Print(string(bs2))
+}
+
+func TestRequest(t *testing.T) {
+	var (
+		err error
+		req *http.Request
+		// reqBytes  []byte
+		resp      *http.Response
+		respBytes []byte
+		body      []byte
+
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				MaxIdleConns:        0,
+				MaxIdleConnsPerHost: 128,
+				MaxConnsPerHost:     0,
+			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+	)
+	defer func() {
+		if err != nil {
+			log.Println(err)
+		}
+	}()
+
+	if req, err = http.NewRequest("GET", "http://fancy-hat-9719.bigbuckbunny.workers.dev/", nil); err != nil {
+		return
+	}
+
+	req.Header.Add("xprotocol", "http")
+	req.Header.Add("xhost", "google.com")
+
+	// if reqBytes, err = httputil.DumpRequest(req, false); err != nil {
+	// 	return
+	// }
+	// fmt.Print(string(reqBytes))
+
+	if resp, err = httpClient.Do(req); err != nil {
+		return
+	}
+
+	resp.TransferEncoding = nil
+	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
+		return
+	}
+
+	fmt.Print(string(respBytes))
+
+	if body, err = ioutil.ReadAll(resp.Body); err != nil {
+		return
+	}
+	fmt.Print(string(body))
 }
