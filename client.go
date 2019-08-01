@@ -5,15 +5,20 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
+
+	"github.com/tencentyun/scf-go-lib/cloudevents/scf"
 )
 
 var urlParse = url.Parse
@@ -151,9 +156,11 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 
 func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https bool) {
 	var (
-		err       error
-		resp      *http.Response
-		respBytes []byte
+		err        error
+		resp       *http.Response
+		bodyBytes  []byte
+		bodyString string
+		gwResp     = &scf.APIGatewayProxyResponse{}
 	)
 	defer func() {
 		if err != nil {
@@ -193,16 +200,44 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 	if resp, err = self.HttpClient.Do(req); err != nil {
 		return
 	}
+	defer resp.Body.Close()
 
-	resp.TransferEncoding = nil
+	bodyBytes, err = ioutil.ReadAll(resp.Body)
 
-	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
+	if len(bodyBytes) <= 0 {
 		return
 	}
 
-	if _, err = localConn.Write(respBytes); err != nil {
+	if bodyString, err = strconv.Unquote(string(bodyBytes)); err != nil {
+		return
+	}
+	bodyBytes = []byte(bodyString)
+
+	if err = json.Unmarshal(bodyBytes, gwResp); err != nil {
 		return
 	}
 
-	_, err = io.Copy(localConn, resp.Body)
+	statusLine := fmt.Sprintf("HTTP/1.1 %d OK\n", gwResp.StatusCode)
+	headers := ""
+	for k, v := range gwResp.Headers {
+		headers += k + ": " + v + "\n"
+	}
+	headers += "\n"
+	body := []byte{}
+
+	if len(gwResp.Body) > 0 {
+		if body, err = base64.StdEncoding.DecodeString(gwResp.Body); err != nil {
+			return
+		}
+	}
+
+	if _, err = localConn.Write([]byte(statusLine)); err != nil {
+		return
+	}
+	if _, err = localConn.Write([]byte(headers)); err != nil {
+		return
+	}
+	if _, err = localConn.Write(body); err != nil {
+		return
+	}
 }
