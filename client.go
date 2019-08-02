@@ -168,6 +168,8 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		}
 	}()
 
+	req.Header.Add("xpath", req.URL.Path)
+	req.Header.Add("xquery", req.URL.RawQuery)
 	req.Header.Add("xhost", req.Host)
 	if https {
 		req.Header.Add("xprotocol", "https")
@@ -194,13 +196,13 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		return
 	}
 
+	req.URL.RawQuery = ""
 	req.RequestURI = ""
 	req.Host = req.URL.Host
 
 	if resp, err = self.HttpClient.Do(req); err != nil {
 		return
 	}
-	defer resp.Body.Close()
 
 	bodyBytes, err = ioutil.ReadAll(resp.Body)
 
