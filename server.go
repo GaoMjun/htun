@@ -15,9 +15,8 @@ import (
 )
 
 type Server struct {
-	Addr       string
-	Key        []byte
-	HttpClient *http.Client
+	Addr string
+	Key  []byte
 }
 
 func ServerRun(args []string) (err error) {
@@ -29,16 +28,6 @@ func ServerRun(args []string) (err error) {
 	server := Server{
 		Addr: *addr,
 		Key:  []byte(*pass),
-		HttpClient: &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConns:        0,
-				MaxIdleConnsPerHost: 128,
-				MaxConnsPerHost:     0,
-			},
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
-		},
 	}
 	err = server.Run()
 
