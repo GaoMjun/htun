@@ -13,20 +13,22 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 )
 
 var urlParse = url.Parse
 
 type Client struct {
-	LocalAddr  string
-	ServerAddr string
-	ServerHost string
-	HttpClient *http.Client
-	CA         *x509.Certificate
-	PK         *rsa.PrivateKey
-	Key        []byte
-	Verbose    bool
+	LocalAddr    string
+	ServerAddr   string
+	ServerHost   string
+	HttpClient   *http.Client
+	CA           *x509.Certificate
+	PK           *rsa.PrivateKey
+	Key          []byte
+	Verbose      bool
+	KeyLogWriter io.Writer
 }
 
 func ClientRun(args []string) (err error) {
@@ -39,25 +41,34 @@ func ClientRun(args []string) (err error) {
 	capath := flags.String("ca", "", "certificate file")
 	pkpath := flags.String("pk", "", "private key file")
 	verbose := flags.Bool("v", false, "verbose mode")
+	sslkeylogfile := flags.String("sslkeylogfile", "", "sslkeylogfile path")
 	flags.Parse(args)
 
 	var (
-		ca *x509.Certificate
-		pk *rsa.PrivateKey
+		ca           *x509.Certificate
+		pk           *rsa.PrivateKey
+		keyLogWriter io.Writer
 	)
 
 	if ca, pk, err = LoadCert(*capath, *pkpath); err != nil {
 		return
 	}
 
+	if len(*sslkeylogfile) > 0 {
+		if keyLogWriter, err = os.OpenFile(*sslkeylogfile, os.O_WRONLY, os.ModePerm); err != nil {
+			return
+		}
+	}
+
 	client := Client{
-		LocalAddr:  *addr,
-		ServerAddr: *sa,
-		ServerHost: *sh,
-		CA:         ca,
-		PK:         pk,
-		Key:        []byte(*pass),
-		Verbose:    *verbose,
+		LocalAddr:    *addr,
+		ServerAddr:   *sa,
+		ServerHost:   *sh,
+		CA:           ca,
+		PK:           pk,
+		Key:          []byte(*pass),
+		Verbose:      *verbose,
+		KeyLogWriter: keyLogWriter,
 	}
 
 	if len(*socksaddr) > 0 {
@@ -82,6 +93,7 @@ func (self *Client) Run() (err error) {
 
 				return net.Dial(network, addr)
 			},
+			TLSClientConfig: &tls.Config{KeyLogWriter: self.KeyLogWriter, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13},
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
