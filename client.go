@@ -181,14 +181,13 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 	}
 
 	if self.Verbose {
-		var s string
 		if https {
-			s = "https://" + req.Host + req.RequestURI
+			req.URL.Scheme = "https"
 		} else {
-			s = "http://" + req.Host + req.RequestURI
+			req.URL.Scheme = "http"
 		}
-
-		log.Println(s)
+		req.URL.Host = req.Host
+		log.Println(req.URL)
 	}
 
 	if strings.HasPrefix(req.RequestURI, "http") {
