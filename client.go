@@ -205,13 +205,6 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		return
 	}
 
-	if disposition := resp.Header.Get("X-Content-Disposition"); len(disposition) > 0 {
-		resp.Header.Set("Content-Disposition", disposition)
-	} else {
-		resp.Header.Del("Content-Disposition")
-	}
-
-	resp.Header.Set("Content-Type", resp.Header.Get("X-Content-Type"))
 	resp.TransferEncoding = nil
 
 	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
