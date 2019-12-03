@@ -96,7 +96,7 @@ func Cert(hostname string, ca *x509.Certificate, pk *rsa.PrivateKey) (cert *tls.
 			CommonName:   hostname,
 			Organization: ca.Subject.Organization,
 		},
-		SubjectKeyId:          ca.SubjectKeyId,
+		SubjectKeyId:          sha1.New().Sum(nil),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
