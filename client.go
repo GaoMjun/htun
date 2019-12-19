@@ -83,9 +83,9 @@ func ClientRun(args []string) (err error) {
 func (self *Client) Run() (err error) {
 	self.HttpClient = &http.Client{
 		Transport: &http.Transport{
-			MaxIdleConns:        0,
-			MaxIdleConnsPerHost: 128,
-			MaxConnsPerHost:     0,
+			// MaxIdleConns:        0,
+			// MaxIdleConnsPerHost: 128,
+			// MaxConnsPerHost:     0,
 			Dial: func(network, addr string) (conn net.Conn, err error) {
 				if self.ServerHost != "" {
 					addr = self.ServerHost
@@ -173,6 +173,7 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		}
 	}()
 
+	req.Header.Add("X-Accept-Encoding", req.Header.Get("Accept-Encoding"))
 	req.Header.Add("xhost", req.Host)
 	if https {
 		req.Header.Add("xprotocol", "https")
@@ -188,6 +189,13 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		}
 		req.URL.Host = req.Host
 		log.Println(req.URL)
+
+		// var bs []byte
+		// if bs, err = httputil.DumpRequest(req, true); err != nil {
+		// 	return
+		// }
+
+		// fmt.Print(string(bs))
 	}
 
 	if strings.HasPrefix(req.RequestURI, "http") {
@@ -206,6 +214,9 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 	}
 
 	resp.TransferEncoding = nil
+	if contentEncoding := resp.Header.Get("X-Content-Encoding"); len(contentEncoding) > 0 {
+		resp.Header.Set("Content-Encoding", contentEncoding)
+	}
 
 	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
 		return
