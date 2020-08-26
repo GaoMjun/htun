@@ -227,7 +227,6 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		}
 	}
 
-	// resp.Header.Set("Access-Control-Allow-Credentials", "true")
 	resp.TransferEncoding = nil
 	if contentEncoding := resp.Header.Get("X-Content-Encoding"); len(contentEncoding) > 0 {
 		resp.Header.Set("Content-Encoding", contentEncoding)
