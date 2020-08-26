@@ -167,6 +167,8 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		resp       *http.Response
 		respBytes  []byte
 		requestURI = req.RequestURI
+		httpClient *http.Client
+		serverAddr string
 	)
 	defer func() {
 		if err != nil {
@@ -206,25 +208,31 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 	req.RequestURI = ""
 
 	if strings.HasSuffix(req.Host, ".googlevideo.com") {
-		if req.URL, err = urlParse("https://googlevideo.bigbuckbunny.workers.dev" + requestURI); err != nil {
-			return
-		}
+		httpClient = http.DefaultClient
+		serverAddr = "https://googlevideo.bigbuckbunny.workers.dev"
+	}
 
-		req.Host = req.URL.Host
+	if strings.HasSuffix(req.Host, "github.com") {
+		httpClient = http.DefaultClient
+		serverAddr = "https://github.bigbuckbunny.workers.dev"
+	}
 
-		if resp, err = http.DefaultClient.Do(req); err != nil {
-			return
-		}
-	} else {
-		if req.URL, err = urlParse(self.ServerAddr + requestURI); err != nil {
-			return
-		}
+	if serverAddr == "" {
+		serverAddr = self.ServerAddr
+	}
 
-		req.Host = req.URL.Host
+	if httpClient == nil {
+		httpClient = self.HttpClient
+	}
 
-		if resp, err = self.HttpClient.Do(req); err != nil {
-			return
-		}
+	if req.URL, err = urlParse(serverAddr + requestURI); err != nil {
+		return
+	}
+
+	req.Host = req.URL.Host
+
+	if resp, err = httpClient.Do(req); err != nil {
+		return
 	}
 
 	resp.TransferEncoding = nil
