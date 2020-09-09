@@ -20,15 +20,15 @@ import (
 var urlParse = url.Parse
 
 type Client struct {
-	LocalAddr    string
-	ServerAddr   string
-	ServerHost   string
-	HttpClient   *http.Client
-	CA           *x509.Certificate
-	PK           *rsa.PrivateKey
-	Key          []byte
-	Verbose      bool
-	KeyLogWriter io.Writer
+	LocalAddr                     string
+	ServerAddr                    string
+	ServerHost                    string
+	HttpClient, DefaultHttpClient *http.Client
+	CA                            *x509.Certificate
+	PK                            *rsa.PrivateKey
+	Key                           []byte
+	Verbose                       bool
+	KeyLogWriter                  io.Writer
 }
 
 func ClientRun(args []string) (err error) {
@@ -95,6 +95,12 @@ func (self *Client) Run() (err error) {
 			},
 			TLSClientConfig: &tls.Config{KeyLogWriter: self.KeyLogWriter, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13},
 		},
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	self.DefaultHttpClient = &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -208,12 +214,12 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 	req.RequestURI = ""
 
 	if strings.HasSuffix(req.Host, ".googlevideo.com") {
-		httpClient = http.DefaultClient
+		httpClient = self.DefaultHttpClient
 		serverAddr = "https://googlevideo.bigbuckbunny.workers.dev"
 	}
 
 	if strings.HasSuffix(req.Host, "github.com") {
-		httpClient = http.DefaultClient
+		httpClient = self.DefaultHttpClient
 		serverAddr = "https://github.bigbuckbunny.workers.dev"
 	}
 
