@@ -15,19 +15,22 @@ import (
 )
 
 type Server struct {
-	Addr string
-	Key  []byte
+	Addr       string
+	Key        []byte
+	Encryption bool
 }
 
 func ServerRun(args []string) (err error) {
 	flags := flag.NewFlagSet("server", flag.PanicOnError)
 	addr := flags.String("l", ":80", "server listen address")
 	pass := flags.String("k", "", "password")
+	m := flags.Bool("m", true, "encrypt data")
 	flags.Parse(args)
 
 	server := Server{
-		Addr: *addr,
-		Key:  []byte(*pass),
+		Addr:       *addr,
+		Key:        []byte(*pass),
+		Encryption: *m,
 	}
 	err = server.Run()
 
@@ -39,7 +42,7 @@ func (self *Server) Run() (err error) {
 	go func() {
 		for {
 			stream := upgrader.Accept()
-			go self.handleStream(stream)
+			go self.handleStream(stream, stream.RemoteHost)
 		}
 	}()
 
@@ -88,16 +91,15 @@ func (self *Server) Run() (err error) {
 	return
 }
 
-func (self *Server) handleStream(tunnelConn *httpstream.Conn) {
+func (self *Server) handleStream(tunnelConn net.Conn, remoteHost string) {
 	defer tunnelConn.Close()
 
 	var (
-		err           error
-		remoteConn    net.Conn
-		tunnelXorConn = ladder.NewConnWithXor(tunnelConn, self.Key)
-		host          string
-		port          int
-		raw           []byte
+		err        error
+		remoteConn net.Conn
+		host       string
+		port       int
+		raw        []byte
 	)
 	defer func() {
 		if err != nil {
@@ -106,18 +108,22 @@ func (self *Server) handleStream(tunnelConn *httpstream.Conn) {
 		}
 	}()
 
-	if host, port, raw, _, err = ladder.ParseHttpHost(tunnelXorConn); err != nil {
+	if self.Encryption {
+		tunnelConn = ladder.NewConnWithXor(tunnelConn, self.Key)
+	}
+
+	if host, port, raw, _, err = ladder.ParseHttpHost(tunnelConn); err != nil {
 		log.Println(err)
 		err = nil
 	}
 
 	if len(host) > 0 {
-		tunnelConn.RemoteHost = fmt.Sprintf("%s:%d", host, port)
+		remoteHost = fmt.Sprintf("%s:%d", host, port)
 	}
 
-	log.Println(tunnelConn.RemoteHost)
+	log.Println(remoteHost)
 
-	if remoteConn, err = net.Dial("tcp", tunnelConn.RemoteHost); err != nil {
+	if remoteConn, err = net.Dial("tcp", remoteHost); err != nil {
 		return
 	}
 	defer remoteConn.Close()
@@ -128,5 +134,5 @@ func (self *Server) handleStream(tunnelConn *httpstream.Conn) {
 		}
 	}
 
-	ladder.Pipe(tunnelXorConn, remoteConn)
+	ladder.PipeIoCopy(tunnelConn, remoteConn)
 }

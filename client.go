@@ -21,6 +21,7 @@ type Client struct {
 	ServerAddr string
 	ServerHost string
 	Key        []byte
+	Encryption bool
 }
 
 func ClientRun(args []string) (err error) {
@@ -30,6 +31,7 @@ func ClientRun(args []string) (err error) {
 	pass := flags.String("k", "", "password")
 	sa := flags.String("sa", "", "server http address")
 	sh := flags.String("sh", "", "server http host")
+	m := flags.Bool("m", true, "encrypt data")
 	flags.Parse(args)
 
 	client := Client{
@@ -37,6 +39,7 @@ func ClientRun(args []string) (err error) {
 		ServerAddr: *sa,
 		ServerHost: *sh,
 		Key:        []byte(*pass),
+		Encryption: *m,
 	}
 
 	if len(*socksaddr) > 0 {
@@ -74,7 +77,7 @@ func (self *Client) handleConn(localConn net.Conn) {
 	var (
 		err        error
 		req        *http.Request
-		tunnelConn *httpstream.Conn
+		tunnelConn net.Conn
 		token, _   = ladder.GenerateToken(string(self.Key), string(self.Key))
 	)
 	defer func() {
@@ -102,10 +105,14 @@ func (self *Client) handleConn(localConn net.Conn) {
 	header.Set("HTTPStream-Host", base64.StdEncoding.EncodeToString([]byte(req.Host)))
 	header.Set("HTTPStream-Token", token)
 
-	if tunnelConn, err = httpstream.Dial(self.ServerAddr, self.ServerHost, header); err != nil {
+	if tunnelConn, err = httpstream.Dial(self.ServerAddr, self.ServerHost, header, true); err != nil {
 		return
 	}
 	defer tunnelConn.Close()
 
-	ladder.Pipe(localConn, ladder.NewConnWithXor(tunnelConn, self.Key))
+	if self.Encryption {
+		tunnelConn = ladder.NewConnWithXor(tunnelConn, self.Key)
+	}
+
+	ladder.PipeIoCopy(localConn, tunnelConn)
 }
