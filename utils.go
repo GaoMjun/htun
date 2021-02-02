@@ -63,7 +63,7 @@ func NewAuthority() (ca *x509.Certificate, privateKey *rsa.PrivateKey, err error
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		NotBefore:             time.Now().AddDate(-1, 0, 0),
-		NotAfter:              time.Now().AddDate(1, 0, 0),
+		NotAfter:              time.Now().AddDate(10, 0, 0),
 		DNSNames:              []string{name},
 		IsCA:                  true,
 	}
