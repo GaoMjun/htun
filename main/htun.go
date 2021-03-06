@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/GaoMjun/htun"
+	"htun"
 )
 
 func init() {
