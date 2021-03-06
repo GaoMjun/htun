@@ -93,7 +93,7 @@ func (self *Client) Run() (err error) {
 
 				return net.Dial(network, addr)
 			},
-			TLSClientConfig: &tls.Config{KeyLogWriter: self.KeyLogWriter, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13},
+			TLSClientConfig: &tls.Config{KeyLogWriter: self.KeyLogWriter, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13, InsecureSkipVerify: true},
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
@@ -101,6 +101,9 @@ func (self *Client) Run() (err error) {
 	}
 
 	self.DefaultHttpClient = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -245,6 +248,8 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 	if contentEncoding := resp.Header.Get("X-Content-Encoding"); len(contentEncoding) > 0 {
 		resp.Header.Set("Content-Encoding", contentEncoding)
 	}
+
+	resp.Header.Del("Content-Disposition")
 
 	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
 		return
