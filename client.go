@@ -149,7 +149,7 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 	}
 
 	if req.Method == http.MethodConnect {
-		if _, err = fmt.Fprint(localConn, "HTTP/1.1 200 Connection established\r\n\r\n"); err != nil {
+		if _, err = fmt.Fprint(localConn, "HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
 			return
 		}
 
@@ -216,15 +216,15 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 
 	req.RequestURI = ""
 
-	if strings.HasSuffix(req.Host, ".googlevideo.com") {
-		httpClient = self.DefaultHttpClient
-		serverAddr = "https://googlevideo.bigbuckbunny.workers.dev"
-	}
+	// if strings.HasSuffix(req.Host, ".googlevideo.com") {
+	// 	httpClient = self.DefaultHttpClient
+	// 	serverAddr = "https://googlevideo.bigbuckbunny.workers.dev"
+	// }
 
-	if strings.HasSuffix(req.Host, "github.com") {
-		httpClient = self.DefaultHttpClient
-		serverAddr = "https://github.bigbuckbunny.workers.dev"
-	}
+	// if strings.HasSuffix(req.Host, "github.com") {
+	// 	httpClient = self.DefaultHttpClient
+	// 	serverAddr = "https://github.bigbuckbunny.workers.dev"
+	// }
 
 	if serverAddr == "" {
 		serverAddr = self.ServerAddr
@@ -249,7 +249,7 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		resp.Header.Set("Content-Encoding", contentEncoding)
 	}
 
-	resp.Header.Del("Content-Disposition")
+	// resp.Header.Del("Content-Disposition")
 
 	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
 		return
