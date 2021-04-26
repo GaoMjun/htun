@@ -2,6 +2,7 @@ package htun
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -14,6 +15,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -83,9 +85,6 @@ func ClientRun(args []string) (err error) {
 func (self *Client) Run() (err error) {
 	self.HttpClient = &http.Client{
 		Transport: &http.Transport{
-			// MaxIdleConns:        0,
-			// MaxIdleConnsPerHost: 128,
-			// MaxConnsPerHost:     0,
 			Dial: func(network, addr string) (conn net.Conn, err error) {
 				if self.ServerHost != "" {
 					addr = self.ServerHost
@@ -95,9 +94,9 @@ func (self *Client) Run() (err error) {
 			},
 			TLSClientConfig: &tls.Config{KeyLogWriter: self.KeyLogWriter, MinVersion: tls.VersionTLS12, MaxVersion: tls.VersionTLS13, InsecureSkipVerify: true},
 		},
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
+		// CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		// 	return http.ErrUseLastResponse
+		// },
 	}
 
 	self.DefaultHttpClient = &http.Client{
@@ -132,8 +131,6 @@ func (self *Client) Run() (err error) {
 }
 
 func (self *Client) handleConn(localConn net.Conn, https bool) {
-	defer localConn.Close()
-
 	var (
 		err error
 		req *http.Request
@@ -147,6 +144,8 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 	if req, err = http.ReadRequest(bufio.NewReader(localConn)); err != nil {
 		return
 	}
+
+	// log.Println(localConn.RemoteAddr(), https)
 
 	if req.Method == http.MethodConnect {
 		if _, err = fmt.Fprint(localConn, "HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
@@ -172,12 +171,12 @@ func (self *Client) handleConn(localConn net.Conn, https bool) {
 
 func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https bool) {
 	var (
-		err        error
-		resp       *http.Response
-		respBytes  []byte
-		requestURI = req.RequestURI
-		httpClient *http.Client
-		serverAddr string
+		err error
+
+		resp     *http.Response
+		reqBytes []byte
+
+		hostport = req.Host
 	)
 	defer func() {
 		if err != nil {
@@ -185,12 +184,12 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		}
 	}()
 
-	req.Header.Add("X-Accept-Encoding", req.Header.Get("Accept-Encoding"))
-	req.Header.Add("xhost", req.Host)
-	if https {
-		req.Header.Add("xprotocol", "https")
-	} else {
-		req.Header.Add("xprotocol", "http")
+	if len(strings.Split(hostport, ":")) != 2 {
+		if https {
+			hostport += ":443"
+		} else {
+			hostport += ":80"
+		}
 	}
 
 	if self.Verbose {
@@ -201,63 +200,41 @@ func (self *Client) forwardRequest(localConn net.Conn, req *http.Request, https 
 		}
 		req.URL.Host = req.Host
 		log.Println(req.URL)
-
-		// var bs []byte
-		// if bs, err = httputil.DumpRequest(req, true); err != nil {
-		// 	return
-		// }
-
-		// fmt.Print(string(bs))
 	}
 
-	if strings.HasPrefix(req.RequestURI, "http") {
-		requestURI = req.RequestURI[len("http://"+req.Host):]
-	}
+	req.Header.Set("Connection", "close")
 
-	req.RequestURI = ""
-
-	// if strings.HasSuffix(req.Host, ".googlevideo.com") {
-	// 	httpClient = self.DefaultHttpClient
-	// 	serverAddr = "https://googlevideo.bigbuckbunny.workers.dev"
-	// }
-
-	// if strings.HasSuffix(req.Host, "github.com") {
-	// 	httpClient = self.DefaultHttpClient
-	// 	serverAddr = "https://github.bigbuckbunny.workers.dev"
-	// }
-
-	if serverAddr == "" {
-		serverAddr = self.ServerAddr
-	}
-
-	if httpClient == nil {
-		httpClient = self.HttpClient
-	}
-
-	if req.URL, err = urlParse(serverAddr + requestURI); err != nil {
+	if reqBytes, err = httputil.DumpRequestOut(req, true); err != nil {
 		return
 	}
 
-	req.Host = req.URL.Host
+	// fmt.Println(string(reqBytes))
 
-	if resp, err = httpClient.Do(req); err != nil {
+	reqBytes = compress(reqBytes)
+
+	if req, err = http.NewRequest(http.MethodPost, self.ServerAddr, bytes.NewReader(reqBytes)); err != nil {
 		return
 	}
 
-	resp.TransferEncoding = nil
-	if contentEncoding := resp.Header.Get("X-Content-Encoding"); len(contentEncoding) > 0 {
-		resp.Header.Set("Content-Encoding", contentEncoding)
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("Content-Length", strconv.Itoa(len(reqBytes)))
+	// req.Header.Set("User-Agent", "")
+
+	req.Header.Add("xhost", hostport)
+	if https {
+		req.Header.Add("xprotocol", "https")
+	} else {
+		req.Header.Add("xprotocol", "http")
 	}
 
-	// resp.Header.Del("Content-Disposition")
+	if resp, err = self.HttpClient.Do(req); err != nil {
+		return
+	}
+	// defer resp.Body.Close()
 
-	if respBytes, err = httputil.DumpResponse(resp, false); err != nil {
+	if _, err = io.Copy(localConn, resp.Body); err != nil {
 		return
 	}
 
-	if _, err = localConn.Write(respBytes); err != nil {
-		return
-	}
-
-	_, err = io.Copy(localConn, resp.Body)
+	self.handleConn(localConn, https)
 }

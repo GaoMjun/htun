@@ -2,6 +2,7 @@ package htun
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -217,5 +218,15 @@ func xor(i, o, key []byte) {
 
 		o[i] = b
 	}
+	return
+}
+
+func compress(i []byte) (o []byte) {
+	b := &bytes.Buffer{}
+	w, _ := gzip.NewWriterLevel(b, 5)
+	w.Write(i)
+	w.Flush()
+	w.Close()
+	o = b.Bytes()
 	return
 }
